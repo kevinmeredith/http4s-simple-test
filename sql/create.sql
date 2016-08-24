@@ -1,5 +1,5 @@
 CREATE TABLE person (
-    id integer primary key,
-    name varchar(100) NOT NULL UNIQUE,
+    ssn NUMERIC(9) primary key,
+    name VARCHAR(100) NOT NULL UNIQUE,
     age integer NOT NULL
 );
