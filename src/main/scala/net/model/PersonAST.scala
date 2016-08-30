@@ -6,41 +6,50 @@ import nat._
 import syntax.sized._
 import scalaz._
 import Scalaz._
+import std.AllInstances
 import cats.data.Xor
-import io.circe.{ Decoder, DecodingFailure }
+import io.circe.{Decoder, DecodingFailure}
+import net.model.PersonAST.InvalidSSNDigit
 
 object PersonAST {
 
-  case object EmptyName
-  case class InvalidAge(x: Int)
+
+  sealed trait PersonError
+  case class EmptyName(value: String)     extends PersonError
+  case class InvalidAge(x: Int)           extends PersonError
+  case class InvalidSSN(value: Int)       extends PersonError
+  case class InvalidSSNDigit(value: Int)  extends PersonError
 
   // note - I made up this number
   private val GuinessBookWorldRecordsOldestHumanAge = 150
   private val MinAge                                = 0
 
-  // case class SSNDigit[N <: Nat](n: N)(implicit ev: LTEq[N, _9])
+  private val ValidSSNDigits: Set[Int] = (0 to 9).toSet
 
-  sealed trait SSNDigit {
-    type N = Nat
-    val n: N
-    implicit val ev: LTEq[N, _9] = implicitly[LTEq[N, _9]]
+  class SSNDigit(value: Int)
+  object SSNDigit {
+    def apply(value: Int): PersonError \/ SSNDigit =
+      if(ValidSSNDigits.contains(value)) \/-( new SSNDigit(value) ) else -\/( InvalidSSNDigit(value) )
   }
-  case object Zero  extends SSNDigit   { override val n = _0 }
-  case object One   extends SSNDigit   { override val n = _1 }
-  case object Two   extends SSNDigit   { override val n = _2 }
-  case object Three extends SSNDigit   { override val n = _3 }
-  case object Four  extends SSNDigit   { override val n = _4 }
-  case object Five  extends SSNDigit   { override val n = _5 }
-  case object Six   extends SSNDigit   { override val n = _6 }
-  case object Seven extends SSNDigit   { override val n = _7 }
-  case object Eight extends SSNDigit   { override val n = _8 }
-  case object Nine  extends SSNDigit   { override val n = _9 }
 
-
-  // A USA Social Security Number has exactly 9 digits, each of which
-  // may be 0 through 9.
+  // A USA Social Security Number has exactly 9 digits
   case class SSN(value: Sized[List[SSNDigit], _9])
   object SSN {
+
+    def apply(value: List[Int]): PersonError \/ SSN = {
+      val ssnDigits: List[PersonError \/ SSNDigit] =
+        value.map(SSNDigit(_))
+      val allOrNothing: PersonError \/ List[SSNDigit] =
+        ssnDigits.sequenceU
+      allOrNothing.flatMap { digits =>
+        digits.sized[_9] match {
+          case Some(xs) => \/-(SSN(xs))
+          case None     => -\/(InvalidSSN(value))
+        }
+      }
+    }
+
+
     // credit: Travis Brown in http://stackoverflow.com/a/39183581/409976
     implicit def decodeSized[L <: Nat, A <: Nat](implicit
       dl: Decoder[List[A]],
@@ -55,15 +64,32 @@ object PersonAST {
 
   class Name private (val value: String)
   object Name {
-    def apply(x: String): \/[EmptyName.type, Name] =
-      if(x.trim.isEmpty) -\/(EmptyName) else \/-(new Name(x))
+    def apply(x: String): PersonError \/ Name =
+      if(x.trim.isEmpty) -\/(EmptyName(x)) else \/-(new Name(x))
   }
 
   class Age(val x: Int)
   object Age {
-    def apply(x: Int): InvalidAge \/ Age =
+    def apply(x: Int): PersonError \/ Age =
       if(x >= MinAge && x <= GuinessBookWorldRecordsOldestHumanAge) \/-(new Age(x)) else -\/(InvalidAge(x))
   }
 
-  case class Person[A <: Nat](ssn: SSN, name: Name, age: Age)(implicit ev: LTEq[A, _9])
+  class Person(ssn: SSN, name: Name, age: Age)
+  object Person {
+    def apply(ssn: Int, name: String, age: Int): PersonError \/ Person = for {
+      validSSN  <- SSN( digitsHelper(ssn) )
+      validName <- Name(name)
+      validAge  <- Age(age)
+    } yield (new Person(validSSN, validName, validAge))
+
+    private def digitsHelper(ssn: Int): PersonError \/ List[Int] = {
+      if(ssn == 0)       \/-(List.empty)
+      else if (ssn < 0)  -\/(InvalidSSN(ssn))
+      else {
+        val digit = ssn % 10
+        \/-(digitsHelper(ssn / 10)) >>= (xs => xs ++ List(digit))
+      }
+    }
+
+  }
 }
