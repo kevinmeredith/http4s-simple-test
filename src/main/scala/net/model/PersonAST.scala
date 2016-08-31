@@ -17,7 +17,8 @@ object PersonAST {
   sealed trait PersonError
   case class EmptyName(value: String)     extends PersonError
   case class InvalidAge(x: Int)           extends PersonError
-  case class InvalidSSN(value: Int)       extends PersonError
+  case class InvalidSSN(value: List[Int]) extends PersonError
+  case class NegativeSSN(value: Int)      extends PersonError
   case class InvalidSSNDigit(value: Int)  extends PersonError
 
   // note - I made up this number
@@ -77,17 +78,19 @@ object PersonAST {
   class Person(ssn: SSN, name: Name, age: Age)
   object Person {
     def apply(ssn: Int, name: String, age: Int): PersonError \/ Person = for {
-      validSSN  <- SSN( digitsHelper(ssn) )
+      digits    <- digitsHelper(ssn)
+      validSSN  <- SSN(digits)
       validName <- Name(name)
       validAge  <- Age(age)
-    } yield (new Person(validSSN, validName, validAge))
+    } yield new Person(validSSN, validName, validAge)
 
     private def digitsHelper(ssn: Int): PersonError \/ List[Int] = {
       if(ssn == 0)       \/-(List.empty)
-      else if (ssn < 0)  -\/(InvalidSSN(ssn))
+      else if (ssn < 0)  -\/(NegativeSSN(ssn))
       else {
-        val digit = ssn % 10
-        \/-(digitsHelper(ssn / 10)) >>= (xs => xs ++ List(digit))
+        val digit     = ssn % 10
+        val nextInput = ssn / 10
+        digitsHelper(nextInput).map(xs => digit :: xs)
       }
     }
 

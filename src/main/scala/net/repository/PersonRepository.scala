@@ -1,6 +1,6 @@
 package net.repository
 
-import net.model.PersonAST.{Person, SSN}
+import net.model.PersonAST._
 import scalaz._
 import Scalaz._
 import std.AllInstances._
@@ -11,6 +11,7 @@ object PersonRepository {
   sealed trait FailedGetPerson
   case class FailedGetPersonDbError(t: Throwable) extends FailedGetPerson
   case class FoundMoreThanOnePerson(ssn: SSN)     extends FailedGetPerson
+  case class FoundInvalidPerson(e: PersonError)   extends FailedGetPerson
 }
 
 object PersonRepositoryImpl extends PersonRepository {
@@ -23,13 +24,18 @@ object PersonRepositoryImpl extends PersonRepository {
 
   override def get(ssn: SSN): Task[FailedGetPerson \/ Option[Person]] = {
     val result: Task[List[(Int, String, Int)]] =
-       sql"SELECT ssn, name, age FROM person".query[(Int, String, Int)].list.run.transact(xa)
+       sql"SELECT ssn, name, age FROM person".query[(Int, String, Int)].list.transact(xa)
     result >>= {
-      case (digits, name, age) :: Nil => Task.pure{ Person(digits, name, age) }
-      case _ :: _                     => Task.pure( -\/(FoundMoreThanOnePerson(ssn)) )
-      case Nil                        => Task.pure( \/-(None) )
+      case (digits, name, age) :: Nil => Task { getHelper( Person(digits, name, age) ).map(Some(_)) }
+      case _ :: _                     => Task { -\/(FoundMoreThanOnePerson(ssn)) }
+      case Nil                        => Task { \/-(None) }
     }
 
+  }
+
+  private def getHelper(result: PersonError \/ Person): FailedGetPerson \/ Person = result match {
+    case \/-(person)      => \/-(person)
+    case -\/(personError) => -\/(FoundInvalidPerson(personError))
   }
 
 }
