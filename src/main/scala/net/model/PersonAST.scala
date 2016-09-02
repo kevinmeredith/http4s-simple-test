@@ -6,13 +6,16 @@ import nat._
 import syntax.sized._
 import scalaz._
 import Scalaz._
-import std.AllInstances
 import cats.data.Xor
 import io.circe.{Decoder, DecodingFailure}
-import net.model.PersonAST.InvalidSSNDigit
+import argonaut._
+import Argonaut._
+import org.http4s.EntityEncoder
+import scodec.bits.ByteVector
+
+import scala.util.Try
 
 object PersonAST {
-
 
   sealed trait PersonError
   case class EmptyName(value: String)     extends PersonError
@@ -27,7 +30,7 @@ object PersonAST {
 
   private val ValidSSNDigits: Set[Int] = (0 to 9).toSet
 
-  class SSNDigit(value: Int)
+  class SSNDigit(val value: Int)
   object SSNDigit {
     def apply(value: Int): PersonError \/ SSNDigit =
       if(ValidSSNDigits.contains(value)) \/-( new SSNDigit(value) ) else -\/( InvalidSSNDigit(value) )
@@ -50,6 +53,18 @@ object PersonAST {
       }
     }
 
+    def apply(ssn: Int): PersonError \/ SSN =
+      digitsHelper(ssn) >>= apply
+
+    def digitsHelper(ssn: Int): PersonError \/ List[Int] = {
+      if(ssn == 0)       \/-(List.empty)
+      else if (ssn < 0)  -\/(NegativeSSN(ssn))
+      else {
+        val digit     = ssn % 10
+        val nextInput = ssn / 10
+        digitsHelper(nextInput).map(xs => digit :: xs)
+      }
+    }
 
     // credit: Travis Brown in http://stackoverflow.com/a/39183581/409976
     implicit def decodeSized[L <: Nat, A <: Nat](implicit
@@ -61,6 +76,13 @@ object PersonAST {
         Xor.fromOption(as.sized[L], DecodingFailure(s"Sized[List[A], _${ti()}]", c.history))
       }
     }
+
+    def ssnToInt(ssn: SSN): Try[BigDecimal] = {
+      val ssnDigits: List[SSNDigit] = ssn.value.unsized
+      val str: String               = ssnDigits.mkString
+      Try {str.toInt}.map(BigDecimal(_))
+    }
+
   }
 
   class Name private (val value: String)
@@ -69,30 +91,39 @@ object PersonAST {
       if(x.trim.isEmpty) -\/(EmptyName(x)) else \/-(new Name(x))
   }
 
-  class Age(val x: Int)
+  class Age(val value: Int)
   object Age {
     def apply(x: Int): PersonError \/ Age =
       if(x >= MinAge && x <= GuinessBookWorldRecordsOldestHumanAge) \/-(new Age(x)) else -\/(InvalidAge(x))
   }
 
-  class Person(ssn: SSN, name: Name, age: Age)
+  class Person(val ssn: SSN, val name: Name, val age: Age)
   object Person {
     def apply(ssn: Int, name: String, age: Int): PersonError \/ Person = for {
-      digits    <- digitsHelper(ssn)
+      digits    <- SSN.digitsHelper(ssn)
       validSSN  <- SSN(digits)
       validName <- Name(name)
       validAge  <- Age(age)
     } yield new Person(validSSN, validName, validAge)
 
-    private def digitsHelper(ssn: Int): PersonError \/ List[Int] = {
-      if(ssn == 0)       \/-(List.empty)
-      else if (ssn < 0)  -\/(NegativeSSN(ssn))
-      else {
-        val digit     = ssn % 10
-        val nextInput = ssn / 10
-        digitsHelper(nextInput).map(xs => digit :: xs)
+
+    implicit def PersonEncodeJson: EncodeJson[Person] =
+      EncodeJson((p: Person) =>
+        ("ssn" := ssnHelper(p.ssn)) ->: ("name" := p.name.value) ->: ("age" := p.age.value) ->: jEmptyObject
+      )
+
+    // @throws RuntimeException
+    private def ssnHelper(ssn: SSN): BigDecimal =
+      SSN.ssnToInt(ssn).getOrElse {
+        throw new RuntimeException(s"Invalid SSN: ${ssn.value.unsized.map(_.value).mkString}.")
       }
-    }
+
+    implicit val personEntityEncoder: EntityEncoder[Person] =
+      EntityEncoder.simple[Person]()(person =>
+        ByteVector( person.asJson.nospaces.getBytes )
+      )
 
   }
+
+
 }

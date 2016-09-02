@@ -13,7 +13,28 @@ libraryDependencies ++= Seq(
   "org.typelevel" %% "cats"                % "0.7.0",
   "io.circe"      %% "circe-core"          % circeVersion,
   "io.circe"      %% "circe-generic"       % circeVersion,
-  "io.circe"      %% "circe-parser"        % circeVersion
+  "io.circe"      %% "circe-parser"        % circeVersion,
+  "io.argonaut"   %% "argonaut"            % "6.1"
+
+)
+
+// credit: https://tpolecat.github.io/2014/04/11/scalac-flags.html
+scalacOptions ++= Seq(
+  "-deprecation",
+  "-encoding", "UTF-8",       // yes, this is 2 args
+  "-feature",
+  "-language:existentials",
+  "-language:higherKinds",
+  "-language:implicitConversions",
+  "-unchecked",
+  "-Xfatal-warnings",
+  "-Xlint",
+  "-Yno-adapted-args",
+  "-Ywarn-dead-code",        // N.B. doesn't work well with the ??? hole
+  "-Ywarn-numeric-widen",
+  "-Ywarn-value-discard",
+  "-Xfuture",
+  "-Ywarn-unused-import"     // 2.11 only
 )
 
 resolvers ++= Seq(

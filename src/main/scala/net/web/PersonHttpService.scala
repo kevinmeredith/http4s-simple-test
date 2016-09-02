@@ -1,26 +1,51 @@
 package net.web
 
-import doobie.imports._
-import org.http4s.HttpService
+import net.model.PersonAST._
+import org.http4s._
 import org.http4s.dsl._
-import net.service.PersonService
-import shapeless._
-import nat._
-
+import net.repository.PersonRepository
+import net.repository.PersonRepository.FailedGetPerson
+import scalaz.concurrent.Task
 import scalaz._
-import Scalaz._
 
 object PersonHttpService {
 
-  val personService = HttpService {
-    case GET -> Root / "person" / IntVar(ssn) => ???
-      //PersonService.get(???)
-//      PersonService.get(ssn) map {
-//        case \/-(Some(person)) => Ok(List(person))
-//        case \/-(None)         => Ok(List.empty)
-//        case -\/(error)        => InternalServerError("Error occurred. Please contact System Administrator.")
-//      }
+  sealed trait PersonServiceError
+  case class InvalidRequest(e: PersonError) extends PersonServiceError
+  case class RepoError(e: FailedGetPerson)  extends PersonServiceError
+
+  def personService(personRepo: PersonRepository) = HttpService {
+    case GET -> Root / "person" / IntVar(ssnInput) =>
+      val result: Task[PersonServiceError \/ Option[Person]] = for {
+        ssn    <- Task { validateSsn(ssnInput) }
+        lookup <- getHelper(ssn, personRepo)
+      } yield lookup
+      result map {
+        case \/-(Some(person))          => Ok(List(person))
+        case \/-(None)                  => Ok(List.empty)
+        case -\/(InvalidRequest(error)) => BadRequest(s"Error: ${error.toString}.")
+        case -\/(RepoError(error))      => InternalServerError("Error occurred. Please contact System Administrator.")
+      }
   }
+
+  private def getHelper(ssn: PersonServiceError \/ SSN,
+                        personRepo: PersonRepository): Task[PersonServiceError \/ Option[Person]] =
+    ssn match {
+      case \/-(validSSN) =>
+        personRepo.get(validSSN) map {
+          case \/-(result) => \/-(result)
+          case -\/(error)  => -\/(RepoError(error))
+        }
+      case -\/(invalid) => Task { -\/(invalid) }
+    }
+
+
+  private def validateSsn(ssn: Int): PersonServiceError \/ SSN =
+    SSN(ssn) match {
+      case \/-(validSsn) => \/-(validSsn)
+      case -\/(error)    => -\/(InvalidRequest(error))
+
+    }
 
 
 }

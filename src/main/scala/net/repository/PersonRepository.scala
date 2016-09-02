@@ -3,7 +3,6 @@ package net.repository
 import net.model.PersonAST._
 import scalaz._
 import Scalaz._
-import std.AllInstances._
 import scalaz.concurrent.Task
 import doobie.imports._
 
