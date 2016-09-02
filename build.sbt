@@ -14,8 +14,8 @@ libraryDependencies ++= Seq(
   "io.circe"      %% "circe-core"          % circeVersion,
   "io.circe"      %% "circe-generic"       % circeVersion,
   "io.circe"      %% "circe-parser"        % circeVersion,
-  "io.argonaut"   %% "argonaut"            % "6.1"
-
+  "io.argonaut"   %% "argonaut"            % "6.1",
+  "org.http4s"    %% "http4s-argonaut"     % http4sVersion
 )
 
 // credit: https://tpolecat.github.io/2014/04/11/scalac-flags.html

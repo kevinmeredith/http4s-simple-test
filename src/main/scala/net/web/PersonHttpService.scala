@@ -7,6 +7,7 @@ import net.repository.PersonRepository
 import net.repository.PersonRepository.FailedGetPerson
 import scalaz.concurrent.Task
 import scalaz._
+import org.http4s.argonaut._
 
 object PersonHttpService {
 
@@ -21,8 +22,8 @@ object PersonHttpService {
         lookup <- getHelper(ssn, personRepo)
       } yield lookup
       result map {
-        case \/-(Some(person))          => Ok(List(person))
-        case \/-(None)                  => Ok(List.empty)
+        case \/-(Some(person))          => Ok(List(person).asJson)
+        case \/-(None)                  => Ok(List[Json].empty)
         case -\/(InvalidRequest(error)) => BadRequest(s"Error: ${error.toString}.")
         case -\/(RepoError(error))      => InternalServerError("Error occurred. Please contact System Administrator.")
       }
