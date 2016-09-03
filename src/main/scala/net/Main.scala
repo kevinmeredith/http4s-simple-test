@@ -14,7 +14,7 @@ object Main extends ServerApp {
     BlazeBuilder
       .bindHttp(8080, "localhost")
       .mountService(helloWorldService, "/api")
-      .mountService(personService(PersonRepositoryImpl),     "/api")
+      .mountService(personService(PersonRepositoryImpl), "/api")
       .start
   }
 }

@@ -122,7 +122,6 @@ object PersonAST {
       EntityEncoder.simple[Person]()(person =>
         ByteVector( person.asJson.nospaces.getBytes )
       )
-
   }
 
 
