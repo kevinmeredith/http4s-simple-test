@@ -20,7 +20,7 @@ object PersonAST {
   sealed trait PersonError
   case class EmptyName(value: String)     extends PersonError
   case class InvalidAge(x: Int)           extends PersonError
-  case class InvalidSSN(value: List[Int]) extends PersonError
+  case class InvalidSSN(value: Int)       extends PersonError
   case class NegativeSSN(value: Int)      extends PersonError
   case class InvalidSSNDigit(value: Int)  extends PersonError
 
@@ -37,10 +37,10 @@ object PersonAST {
   }
 
   // A USA Social Security Number has exactly 9 digits
-  case class SSN(value: Sized[List[SSNDigit], _9])
+  case class SSN private (value: Sized[List[SSNDigit], _9])
   object SSN {
 
-    def apply(value: List[Int]): PersonError \/ SSN = {
+    def apply(value: List[Int], original: Int): PersonError \/ SSN = {
       val ssnDigits: List[PersonError \/ SSNDigit] =
         value.map(SSNDigit(_))
       val allOrNothing: PersonError \/ List[SSNDigit] =
@@ -48,13 +48,13 @@ object PersonAST {
       allOrNothing.flatMap { digits =>
         digits.sized[_9] match {
           case Some(xs) => \/-(SSN(xs))
-          case None     => -\/(InvalidSSN(value))
+          case None     => -\/(InvalidSSN(original))
         }
       }
     }
 
     def apply(ssn: Int): PersonError \/ SSN =
-      digitsHelper(ssn) >>= apply
+      digitsHelper(ssn) >>= {list => apply(list, ssn)}
 
     def digitsHelper(ssn: Int): PersonError \/ List[Int] = {
       if(ssn == 0)       \/-(List.empty)
@@ -62,7 +62,7 @@ object PersonAST {
       else {
         val digit     = ssn % 10
         val nextInput = ssn / 10
-        digitsHelper(nextInput).map(xs => digit :: xs)
+        digitsHelper(nextInput).map(xs => xs ++ List(digit))
       }
     }
 
@@ -77,10 +77,11 @@ object PersonAST {
       }
     }
 
+    // use Math.pow(10, n) * x since each digit is single (0 - 9)
     def ssnToInt(ssn: SSN): Try[BigDecimal] = {
       val ssnDigits: List[SSNDigit] = ssn.value.unsized
       val str: String               = ssnDigits.mkString
-      Try {str.toInt}.map(BigDecimal(_))
+      Try {str}.map(BigDecimal(_))
     }
 
   }
@@ -101,7 +102,7 @@ object PersonAST {
   object Person {
     def apply(ssn: Int, name: String, age: Int): PersonError \/ Person = for {
       digits    <- SSN.digitsHelper(ssn)
-      validSSN  <- SSN(digits)
+      validSSN  <- SSN(digits, ssn)
       validName <- Name(name)
       validAge  <- Age(age)
     } yield new Person(validSSN, validName, validAge)

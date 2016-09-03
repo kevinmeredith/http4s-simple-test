@@ -40,12 +40,10 @@ object PersonHttpService {
       case -\/(invalid) => Task { -\/(invalid) }
     }
 
-
   private def validateSsn(ssn: Int): PersonServiceError \/ SSN =
     SSN(ssn) match {
       case \/-(validSsn) => \/-(validSsn)
       case -\/(error)    => -\/(InvalidRequest(error))
-
     }
 
 

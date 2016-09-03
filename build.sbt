@@ -1,6 +1,6 @@
 scalaVersion := "2.11.8" // Also supports 2.10.x
 
-val http4sVersion = "0.14.4"
+val http4sVersion = "0.14.5a"
 
 val circeVersion = "0.4.1"
 
