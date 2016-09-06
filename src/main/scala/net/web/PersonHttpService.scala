@@ -18,14 +18,16 @@ object PersonHttpService {
   def personService(personRepo: PersonRepository) = HttpService {
     case GET -> Root / "person" / IntVar(ssnInput) =>
       val result: Task[PersonServiceError \/ Option[Person]] = for {
-        ssn    <- Task { validateSsn(ssnInput) }
+        ssn    <- Task.now { validateSsn(ssnInput) }
         lookup <- getHelper(ssn, personRepo)
       } yield lookup
-      result flatMap {
+      result.flatMap {
         case \/-(Some(person))          => Ok(person)
         case \/-(None)                  => Ok(JsonObject.empty.toString)
         case -\/(InvalidRequest(error)) => BadRequest(s"Error: ${error.toString}.")
-        case -\/(RepoError(error))      => InternalServerError("Error occurred. Please contact System Administrator.")
+        case -\/(RepoError(error))      => InternalServerError(s"App failed due to ${error}.")
+      }.handleWith {
+        case t => InternalServerError ( t.getMessage )
       }
   }
 
@@ -37,7 +39,7 @@ object PersonHttpService {
           case \/-(result) => \/-(result)
           case -\/(error)  => -\/(RepoError(error))
         }
-      case -\/(invalid) => Task { -\/(invalid) }
+      case -\/(invalid) => Task.now { -\/(invalid) }
     }
 
   private def validateSsn(ssn: Int): PersonServiceError \/ SSN =

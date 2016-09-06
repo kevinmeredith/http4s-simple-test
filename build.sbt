@@ -13,7 +13,8 @@ libraryDependencies ++= Seq(
   "io.circe"      %% "circe-core"          % circeVersion,
   "io.circe"      %% "circe-generic"       % circeVersion,
   "io.circe"      %% "circe-parser"        % circeVersion,
-  "io.argonaut"   %% "argonaut"            % "6.1"
+  "io.argonaut"   %% "argonaut"            % "6.1",
+  "postgresql"    % "postgresql"           % "9.1-901-1.jdbc4"
 )
 
 // credit: https://tpolecat.github.io/2014/04/11/scalac-flags.html
