@@ -13,8 +13,6 @@ import Argonaut._
 import org.http4s.EntityEncoder
 import scodec.bits.ByteVector
 
-import scala.util.Try
-
 object PersonAST {
 
   sealed trait PersonError
@@ -77,11 +75,13 @@ object PersonAST {
       }
     }
 
-    // use Math.pow(10, n) * x since each digit is single (0 - 9)
-    def ssnToInt(ssn: SSN): Try[BigDecimal] = {
+    def ssnToInt(ssn: SSN): BigDecimal = {
       val ssnDigits: List[SSNDigit] = ssn.value.unsized
-      val str: String               = ssnDigits.mkString
-      Try {str}.map(BigDecimal(_))
+      val singleDigits: List[Int]    = ssnDigits.map(_.value)
+      singleDigits.reverse.zipWithIndex.foldRight(BigDecimal.valueOf(0)){ (elem, acc) =>
+        val (num, index) = elem
+        Math.pow(10, index.toDouble) * num + acc
+      }
     }
 
   }
@@ -110,20 +110,13 @@ object PersonAST {
 
     implicit def PersonEncodeJson: EncodeJson[Person] =
       EncodeJson((p: Person) =>
-        ("ssn" := ssnHelper(p.ssn)) ->: ("name" := p.name.value) ->: ("age" := p.age.value) ->: jEmptyObject
+        ("ssn" := SSN.ssnToInt(p.ssn)) ->: ("name" := p.name.value) ->: ("age" := p.age.value) ->: jEmptyObject
       )
-
-    // @throws RuntimeException
-    private def ssnHelper(ssn: SSN): BigDecimal =
-      SSN.ssnToInt(ssn).getOrElse {
-        throw new RuntimeException(s"Invalid SSN: ${ssn.value.unsized.map(_.value).mkString}.")
-      }
 
     implicit val personEntityEncoder: EntityEncoder[Person] =
       EntityEncoder.simple[Person]()(person =>
         ByteVector( person.asJson.nospaces.getBytes )
       )
   }
-
 
 }

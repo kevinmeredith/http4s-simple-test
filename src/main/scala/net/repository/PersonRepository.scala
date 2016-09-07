@@ -31,8 +31,9 @@ object PersonRepositoryImpl extends PersonRepository {
   }
 
   private def getHelper(ssn: SSN): Task[FailedGetPerson \/ List[(Int, String, Int)]] = {
+
     val result: Task[List[(Int, String, Int)]] =
-      sql"SELECT ssn, name, age FROM person".query[(Int, String, Int)].list.transact(xa)
+      sql"SELECT ssn, name, age FROM person WHERE ssn=${SSN.ssnToInt(ssn)}".query[(Int, String, Int)].list.transact(xa)
     result.map(\/-(_)).handle {
       case t => -\/(FailedGetPersonDbError(t))
     }
